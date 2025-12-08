@@ -119,15 +119,19 @@ router.post('/', async (req: Request, res: Response) => {
       rating,
     } = req.body;
 
-    if (!title || !author) {
-      return res.status(400).json({ error: 'Title and author are required' });
+    // Validate title and author - must be non-empty strings
+    if (!title || typeof title !== 'string' || title.trim().length === 0) {
+      return res.status(400).json({ error: 'Title is required and cannot be empty' });
+    }
+    if (!author || typeof author !== 'string' || author.trim().length === 0) {
+      return res.status(400).json({ error: 'Author is required and cannot be empty' });
     }
 
     // Create book with optional initial review
     const book = await prisma.book.create({
       data: {
-        title,
-        author,
+        title: title.trim(),
+        author: author.trim(),
         tags: Array.isArray(tags) ? tags : tags.split(',').map((t: string) => t.trim()).filter(Boolean),
         coverUrl: coverUrl || `https://placehold.co/150x220/635C7B/white?text=${encodeURIComponent(title.substring(0, 12))}`,
         status: status as ReadingStatus,
@@ -194,11 +198,23 @@ router.put('/:id', async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Book not found' });
     }
 
+    // Validate title and author if being updated - must be non-empty strings
+    if (updates.title !== undefined) {
+      if (typeof updates.title !== 'string' || updates.title.trim().length === 0) {
+        return res.status(400).json({ error: 'Title cannot be empty' });
+      }
+    }
+    if (updates.author !== undefined) {
+      if (typeof updates.author !== 'string' || updates.author.trim().length === 0) {
+        return res.status(400).json({ error: 'Author cannot be empty' });
+      }
+    }
+
     // Build update data
     const updateData: any = {};
     
-    if (updates.title !== undefined) updateData.title = updates.title;
-    if (updates.author !== undefined) updateData.author = updates.author;
+    if (updates.title !== undefined) updateData.title = updates.title.trim();
+    if (updates.author !== undefined) updateData.author = updates.author.trim();
     if (updates.tags !== undefined) {
       updateData.tags = Array.isArray(updates.tags) 
         ? updates.tags 

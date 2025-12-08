@@ -41,32 +41,110 @@ interface BookRecommendation {
 }
 
 /**
- * Enhance recommendations with cover URLs from Open Library
+ * Try to get cover from Google Books API
+ */
+async function getCoverFromGoogleBooks(title: string, author: string): Promise<{ coverUrl?: string; isbn?: string; pages?: number }> {
+  try {
+    const query = encodeURIComponent(`${title} ${author}`);
+    const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`);
+    const data = await response.json();
+    
+    if (data.items && data.items.length > 0) {
+      const book = data.items[0].volumeInfo;
+      const isbn = book.industryIdentifiers?.find((id: any) => id.type === 'ISBN_13' || id.type === 'ISBN_10')?.identifier;
+      
+      // Google Books provides different sizes: smallThumbnail, thumbnail, small, medium, large
+      const coverUrl = book.imageLinks?.large || book.imageLinks?.medium || book.imageLinks?.thumbnail;
+      
+      return {
+        coverUrl: coverUrl?.replace('http://', 'https://'),
+        isbn,
+        pages: book.pageCount,
+      };
+    }
+  } catch (error) {
+    console.warn(`Google Books failed for ${title}:`, error);
+  }
+  return {};
+}
+
+/**
+ * Try to get cover from Open Library API
+ */
+async function getCoverFromOpenLibrary(title: string, author: string): Promise<{ coverUrl?: string; isbn?: string; pages?: number }> {
+  try {
+    const response = await fetch(
+      `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&limit=1`
+    );
+    const data = await response.json();
+    
+    if (data.docs?.[0]) {
+      const book = data.docs[0];
+      return {
+        coverUrl: book.cover_i ? `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg` : undefined,
+        isbn: book.isbn?.[0],
+        pages: book.number_of_pages_median,
+      };
+    }
+  } catch (error) {
+    console.warn(`Open Library failed for ${title}:`, error);
+  }
+  return {};
+}
+
+/**
+ * Try to get cover using ISBN from Open Library covers
+ */
+async function getCoverByISBN(isbn: string): Promise<string | undefined> {
+  if (!isbn) return undefined;
+  
+  try {
+    // Try Open Library ISBN endpoint
+    const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+    const response = await fetch(coverUrl, { method: 'HEAD' });
+    
+    if (response.ok) {
+      return coverUrl;
+    }
+  } catch (error) {
+    console.warn(`ISBN cover lookup failed for ${isbn}:`, error);
+  }
+  return undefined;
+}
+
+/**
+ * Enhance recommendations with cover URLs using multiple sources in parallel
  */
 async function enhanceWithCovers(recommendations: BookRecommendation[]): Promise<BookRecommendation[]> {
   return Promise.all(
     recommendations.map(async (rec) => {
       try {
-        const searchResponse = await fetch(
-          `https://openlibrary.org/search.json?title=${encodeURIComponent(rec.title)}&author=${encodeURIComponent(rec.author)}&limit=1`
-        );
-        const searchData = await searchResponse.json();
-        
-        if (searchData.docs?.[0]) {
-          const book = searchData.docs[0];
-          return {
-            ...rec,
-            isbn: book.isbn?.[0],
-            coverUrl: book.cover_i 
-              ? `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg`
-              : undefined,
-            estimatedPages: rec.estimatedPages || book.number_of_pages_median,
-          };
+        // Try all sources in parallel for maximum coverage
+        const [googleResult, openLibResult] = await Promise.all([
+          getCoverFromGoogleBooks(rec.title, rec.author),
+          getCoverFromOpenLibrary(rec.title, rec.author),
+        ]);
+
+        // Prefer Google Books cover (usually higher quality), fall back to Open Library
+        let coverUrl = googleResult.coverUrl || openLibResult.coverUrl;
+        let isbn = rec.isbn || googleResult.isbn || openLibResult.isbn;
+        let estimatedPages = rec.estimatedPages || googleResult.pages || openLibResult.pages;
+
+        // If we still don't have a cover but we have an ISBN, try ISBN lookup
+        if (!coverUrl && isbn) {
+          coverUrl = await getCoverByISBN(isbn);
         }
+
+        return {
+          ...rec,
+          coverUrl,
+          isbn,
+          estimatedPages,
+        };
       } catch (error) {
         console.warn(`Failed to fetch cover for ${rec.title}:`, error);
+        return rec;
       }
-      return rec;
     })
   );
 }
