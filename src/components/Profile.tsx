@@ -20,7 +20,7 @@ interface ProfileProps {
  * Profile component displaying the library owner's information
  * Shows name, bio, and reading stats in a cozy card design
  */
-export function Profile({ bookCount, stats, readingGoal }: ProfileProps) {
+export function Profile({ stats, readingGoal }: ProfileProps) {
   const goalProgress = Math.min((stats.read / readingGoal.target) * 100, 100);
 
   return (

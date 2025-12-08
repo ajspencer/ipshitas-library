@@ -4,7 +4,10 @@
 
 import { Book, getAverageRating } from '../types/book';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+// VITE_API_URL from Render gives the base URL without /api suffix
+const rawApiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Ensure the URL has /api suffix
+const API_BASE_URL = rawApiUrl.endsWith('/api') ? rawApiUrl : `${rawApiUrl.replace(/\/$/, '')}/api`;
 
 export interface BookRecommendation {
   title: string;
@@ -20,7 +23,6 @@ export interface RecommendationResponse {
   recommendations: BookRecommendation[];
   basedOn: number;
   generatedAt: string;
-  source?: 'openai' | 'parallel';
 }
 
 export interface RecommendationPreferences {
@@ -40,15 +42,14 @@ export interface SimilarBooksResponse {
 
 /**
  * Fetch personalized book recommendations based on user's library
+ * Powered by Parallel AI
  * @param books - User's book library
  * @param preferences - Optional preferences to guide recommendations
- * @param provider - AI provider to use ('openai' or 'parallel')
  * @returns Array of book recommendations with reasons
  */
 export async function getRecommendations(
   books: Book[],
-  preferences?: RecommendationPreferences,
-  provider: 'openai' | 'parallel' = 'openai'
+  preferences?: RecommendationPreferences
 ): Promise<RecommendationResponse> {
   // Only send read books with reviews for better recommendations
   const readBooksWithReviews = books
@@ -80,7 +81,6 @@ export async function getRecommendations(
     body: JSON.stringify({
       books: booksToSend,
       preferences,
-      provider,
     }),
   });
 

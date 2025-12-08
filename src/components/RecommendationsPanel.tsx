@@ -1,10 +1,8 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Sparkles, RefreshCw, Plus, ExternalLink, AlertCircle, ChevronDown, ChevronUp, Globe, Cpu } from 'lucide-react';
+import { Sparkles, RefreshCw, Plus, ExternalLink, AlertCircle, ChevronDown, ChevronUp, Globe } from 'lucide-react';
 import { Book, BookFormData } from '../types/book';
 import { BookRecommendation, getRecommendations, checkApiHealth } from '../services/recommendationApi';
-
-type AIProvider = 'openai' | 'parallel';
 
 interface RecommendationsPanelProps {
   books: Book[];
@@ -22,8 +20,6 @@ export function RecommendationsPanel({ books, onAddBook }: RecommendationsPanelP
   const [isExpanded, setIsExpanded] = useState(true);
   const [apiAvailable, setApiAvailable] = useState<boolean | null>(null);
   const [lastGenerated, setLastGenerated] = useState<Date | null>(null);
-  const [provider, setProvider] = useState<AIProvider>('parallel');
-  const [lastSource, setLastSource] = useState<string | null>(null);
 
   // Check API availability on mount
   useEffect(() => {
@@ -40,10 +36,9 @@ export function RecommendationsPanel({ books, onAddBook }: RecommendationsPanelP
     setError(null);
 
     try {
-      const response = await getRecommendations(books, undefined, provider);
+      const response = await getRecommendations(books);
       setRecommendations(response.recommendations);
       setLastGenerated(new Date(response.generatedAt));
-      setLastSource(response.source || provider);
     } catch (err) {
       console.error('Failed to get recommendations:', err);
       setError(err instanceof Error ? err.message : 'Failed to get recommendations');
@@ -110,33 +105,12 @@ export function RecommendationsPanel({ books, onAddBook }: RecommendationsPanelP
                 </div>
               )}
 
-              {/* AI Provider Toggle */}
-              <div className="mb-4 flex items-center justify-center gap-2">
-                <span className="text-sm text-primary-500">Powered by:</span>
-                <div className="inline-flex rounded-cozy bg-lavender p-1">
-                  <button
-                    onClick={() => setProvider('parallel')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-all ${
-                      provider === 'parallel'
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'text-primary-600 hover:text-primary-800'
-                    }`}
-                  >
-                    <Globe className="w-3.5 h-3.5" />
-                    Parallel AI
-                  </button>
-                  <button
-                    onClick={() => setProvider('openai')}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-sm font-medium transition-all ${
-                      provider === 'openai'
-                        ? 'bg-primary text-white shadow-sm'
-                        : 'text-primary-600 hover:text-primary-800'
-                    }`}
-                  >
-                    <Cpu className="w-3.5 h-3.5" />
-                    ChatGPT
-                  </button>
-                </div>
+              {/* Powered by Parallel AI badge */}
+              <div className="mb-4 flex items-center justify-center">
+                <span className="flex items-center gap-1.5 px-3 py-1.5 bg-lavender rounded-cozy text-sm font-medium text-primary-700">
+                  <Globe className="w-3.5 h-3.5" />
+                  Powered by Parallel AI
+                </span>
               </div>
 
               {/* Get Recommendations Button */}
@@ -150,7 +124,7 @@ export function RecommendationsPanel({ books, onAddBook }: RecommendationsPanelP
                   </h3>
                   <p className="text-primary-500 text-sm mb-6 max-w-md mx-auto">
                     {readBooksCount >= 3
-                      ? `Based on ${readBooksCount} books you've read, ${provider === 'parallel' ? 'Parallel AI will search the web' : 'ChatGPT will analyze your taste'} to find your perfect next book.`
+                      ? `Based on ${readBooksCount} books you've read, Parallel AI will search the web to find your perfect next book.`
                       : 'Add more books to your library to get personalized recommendations based on your reading taste.'}
                   </p>
                   <button
@@ -192,12 +166,10 @@ export function RecommendationsPanel({ books, onAddBook }: RecommendationsPanelP
                       {lastGenerated && (
                         <span>Generated {lastGenerated.toLocaleTimeString()}</span>
                       )}
-                      {lastSource && (
-                        <span className="flex items-center gap-1 px-2 py-0.5 bg-lavender rounded text-xs">
-                          {lastSource === 'parallel' ? <Globe className="w-3 h-3" /> : <Cpu className="w-3 h-3" />}
-                          {lastSource === 'parallel' ? 'Parallel AI' : 'ChatGPT'}
-                        </span>
-                      )}
+                      <span className="flex items-center gap-1 px-2 py-0.5 bg-lavender rounded text-xs">
+                        <Globe className="w-3 h-3" />
+                        Parallel AI
+                      </span>
                     </div>
                     <button
                       onClick={handleGetRecommendations}

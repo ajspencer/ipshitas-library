@@ -2,6 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { recommendationsRouter } from './routes/recommendations.js';
+import { booksRouter } from './routes/books.js';
+import { shelvesRouter } from './routes/shelves.js';
+import { readingGoalRouter } from './routes/reading-goal.js';
+import { profileRouter } from './routes/profile.js';
 
 // Load environment variables
 dotenv.config();
@@ -9,11 +13,21 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// CORS configuration
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
+  credentials: true,
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Routes
+app.use('/api/books', booksRouter);
+app.use('/api/shelves', shelvesRouter);
+app.use('/api/reading-goal', readingGoalRouter);
+app.use('/api/profile', profileRouter);
 app.use('/api/recommendations', recommendationsRouter);
 
 // Health check
@@ -31,4 +45,3 @@ app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📚 Ipshita's Library API ready!`);
 });
-

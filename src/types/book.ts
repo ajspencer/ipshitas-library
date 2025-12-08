@@ -28,7 +28,7 @@ export interface Book {
   status: ReadingStatus;
   progress?: number; // Pages read (for "reading" status)
   totalPages?: number;
-  shelf?: string; // Custom shelf name
+  shelf?: string | null; // Custom shelf name (null means no shelf)
   isbn?: string; // For fetching real covers
   description?: string; // Book description from API
 }

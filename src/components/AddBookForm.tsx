@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, X, BookPlus, Search, Loader2 } from 'lucide-react';
-import { BookFormData, ReadingStatus, Shelf } from '../types/book';
+import { BookFormData, Shelf } from '../types/book';
 import { StarRating } from './StarRating';
 import { searchBooks, OpenLibraryBook } from '../services/bookApi';
 

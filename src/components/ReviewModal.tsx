@@ -86,7 +86,8 @@ export function ReviewModal({
       author: editForm.author,
       tags: editForm.tags.split(',').map(t => t.trim()).filter(t => t),
       totalPages: editForm.totalPages ? parseInt(editForm.totalPages) : undefined,
-      shelf: editForm.shelf || undefined,
+      // Pass null explicitly when no shelf is selected to allow removing from shelf
+      shelf: editForm.shelf || null,
     });
     setIsEditingBook(false);
   };
@@ -240,6 +241,26 @@ export function ReviewModal({
                         className="w-full px-3 py-2 bg-white border border-lavender-dark rounded-cozy text-primary-700 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
                         placeholder="Total pages"
                       />
+                      {/* Custom Shelf Selector */}
+                      {allShelves.filter(s => !['want_to_read', 'reading', 'read'].includes(s.id)).length > 0 && (
+                        <div className="relative">
+                          <select
+                            value={editForm.shelf}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, shelf: e.target.value }))}
+                            className="w-full px-3 py-2 bg-white border border-lavender-dark rounded-cozy text-primary-700 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 appearance-none cursor-pointer"
+                          >
+                            <option value="">No custom shelf</option>
+                            {allShelves
+                              .filter(s => !['want_to_read', 'reading', 'read'].includes(s.id))
+                              .map(shelf => (
+                                <option key={shelf.id} value={shelf.id}>
+                                  {shelf.name}
+                                </option>
+                              ))}
+                          </select>
+                          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-primary-400 pointer-events-none" />
+                        </div>
+                      )}
                       <div className="flex gap-2">
                         <button
                           onClick={handleSaveBookEdit}

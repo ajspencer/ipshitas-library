@@ -1,5 +1,4 @@
 import { Router, Request, Response } from 'express';
-import OpenAI from 'openai';
 
 const router = Router();
 
@@ -23,7 +22,6 @@ interface RecommendationRequest {
     avoidGenres?: string[];
     preferredLength?: 'short' | 'medium' | 'long';
   };
-  provider?: 'openai' | 'parallel'; // Allow choosing the AI provider
 }
 
 interface SimilarBooksRequest {
@@ -71,87 +69,6 @@ async function enhanceWithCovers(recommendations: BookRecommendation[]): Promise
       return rec;
     })
   );
-}
-
-/**
- * Get recommendations using OpenAI
- */
-async function getOpenAIRecommendations(
-  books: BookInput[],
-  preferences?: RecommendationRequest['preferences']
-): Promise<BookRecommendation[]> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.');
-  }
-
-  const openai = new OpenAI({ apiKey });
-
-  const bookSummary = books
-    .map(b => {
-      let summary = `- "${b.title}" by ${b.author}`;
-      if (b.rating) summary += ` (rated ${b.rating}/5)`;
-      if (b.tags?.length) summary += ` [${b.tags.join(', ')}]`;
-      if (b.review) summary += `\n  Review: "${b.review.substring(0, 200)}${b.review.length > 200 ? '...' : ''}"`;
-      return summary;
-    })
-    .join('\n');
-
-  const preferencesText = preferences
-    ? `
-Additional preferences:
-${preferences.favoriteGenres?.length ? `- Favorite genres: ${preferences.favoriteGenres.join(', ')}` : ''}
-${preferences.avoidGenres?.length ? `- Avoid genres: ${preferences.avoidGenres.join(', ')}` : ''}
-${preferences.preferredLength ? `- Preferred book length: ${preferences.preferredLength}` : ''}
-`.trim()
-    : '';
-
-  const prompt = `You are a literary expert and book recommender. Based on the following reading history and preferences, suggest 6 personalized book recommendations.
-
-Reading History:
-${bookSummary}
-
-${preferencesText}
-
-Analyze the patterns in the reader's preferences - their favorite themes, writing styles, genres, and what they seem to value in books based on their ratings and reviews. Then recommend books they would likely enjoy.
-
-IMPORTANT: Do NOT recommend any books that are already in their reading history above.
-
-Respond with a JSON array of exactly 6 book recommendations. Each recommendation must have this exact structure:
-{
-  "title": "Book Title",
-  "author": "Author Name",
-  "reason": "A personalized 2-3 sentence explanation of why this reader would enjoy this book, referencing specific books from their history",
-  "genres": ["Genre1", "Genre2"],
-  "estimatedPages": 350
-}
-
-Only respond with the JSON array, no other text.`;
-
-  const completion = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a helpful book recommendation assistant. Always respond with valid JSON arrays only.'
-      },
-      {
-        role: 'user',
-        content: prompt
-      }
-    ],
-    temperature: 0.8,
-    max_tokens: 2000,
-  });
-
-  const responseText = completion.choices[0]?.message?.content?.trim();
-  
-  if (!responseText) {
-    throw new Error('Empty response from OpenAI');
-  }
-
-  const jsonText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-  return JSON.parse(jsonText);
 }
 
 /**
@@ -409,10 +326,11 @@ Only respond with the JSON array.`,
 /**
  * POST /api/recommendations
  * Generate personalized book recommendations based on user's library
+ * Powered by Parallel AI
  */
 router.post('/', async (req: Request, res: Response) => {
   try {
-    const { books, preferences, provider = 'openai' }: RecommendationRequest = req.body;
+    const { books, preferences }: RecommendationRequest = req.body;
 
     if (!books || books.length === 0) {
       return res.status(400).json({ 
@@ -420,31 +338,7 @@ router.post('/', async (req: Request, res: Response) => {
       });
     }
 
-    let recommendations: BookRecommendation[];
-    let source = provider;
-
-    try {
-      if (provider === 'parallel') {
-        recommendations = await getParallelRecommendations(books, preferences);
-      } else {
-        recommendations = await getOpenAIRecommendations(books, preferences);
-      }
-    } catch (primaryError) {
-      console.warn(`Primary provider (${provider}) failed, trying fallback:`, primaryError);
-      
-      // Try fallback provider
-      try {
-        if (provider === 'parallel') {
-          recommendations = await getOpenAIRecommendations(books, preferences);
-          source = 'openai';
-        } else {
-          recommendations = await getParallelRecommendations(books, preferences);
-          source = 'parallel';
-        }
-      } catch (fallbackError) {
-        throw primaryError; // Re-throw original error if both fail
-      }
-    }
+    const recommendations = await getParallelRecommendations(books, preferences);
 
     if (!Array.isArray(recommendations)) {
       throw new Error('Invalid response format');
@@ -457,7 +351,6 @@ router.post('/', async (req: Request, res: Response) => {
       recommendations: enhancedRecommendations,
       basedOn: books.length,
       generatedAt: new Date().toISOString(),
-      source,
     });
 
   } catch (error) {

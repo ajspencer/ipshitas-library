@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Layout } from './components/Layout';
 import { Profile } from './components/Profile';
 import { BookGrid } from './components/BookGrid';
@@ -7,13 +7,9 @@ import { AddBookForm } from './components/AddBookForm';
 import { SearchFilterBar } from './components/SearchFilterBar';
 import { ReadingStats } from './components/ReadingStats';
 import { RecommendationsPanel } from './components/RecommendationsPanel';
-import { Book, BookFormData, ReviewFormData, ReadingStatus, Shelf, ReadingGoal, getAverageRating, migrateBook } from './types/book';
-import { initialBooks, defaultShelves, initialReadingGoal } from './data/initialBooks';
-
-// LocalStorage keys for persisting data
-const STORAGE_KEY = 'ipshitas-library-books';
-const SHELVES_KEY = 'ipshitas-library-shelves';
-const GOAL_KEY = 'ipshitas-library-goal';
+import { Book, BookFormData, ReviewFormData, ReadingStatus, Shelf, ReadingGoal, getAverageRating } from './types/book';
+import { defaultShelves } from './data/initialBooks';
+import * as api from './services/api';
 
 export type SortOption = 'dateAdded' | 'rating' | 'title' | 'author';
 export type SortDirection = 'asc' | 'desc';
@@ -23,46 +19,18 @@ export type SortDirection = 'asc' | 'desc';
  * A cozy personal book tracking application
  */
 function App() {
-  // Initialize books from localStorage or use initial data
-  const [books, setBooks] = useState<Book[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Migrate old format books to new format
-        const migratedBooks = parsed.map((b: any) => migrateBook(b));
-        // Merge with initial books to ensure we always have the base data
-        const savedIds = new Set(migratedBooks.map((b: Book) => b.id));
-        const missingInitial = initialBooks.filter(b => !savedIds.has(b.id));
-        return [...migratedBooks, ...missingInitial];
-      }
-    } catch (error) {
-      console.warn('Failed to load books from localStorage:', error);
-    }
-    return initialBooks;
+  // Data state
+  const [books, setBooks] = useState<Book[]>([]);
+  const [customShelves, setCustomShelves] = useState<Shelf[]>([]);
+  const [readingGoal, setReadingGoal] = useState<ReadingGoal>({
+    year: new Date().getFullYear(),
+    target: 24,
+    current: 0,
   });
 
-  // Custom shelves
-  const [customShelves, setCustomShelves] = useState<Shelf[]>(() => {
-    try {
-      const saved = localStorage.getItem(SHELVES_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (error) {
-      console.warn('Failed to load shelves from localStorage:', error);
-    }
-    return [];
-  });
-
-  // Reading goal
-  const [readingGoal, setReadingGoal] = useState<ReadingGoal>(() => {
-    try {
-      const saved = localStorage.getItem(GOAL_KEY);
-      if (saved) return JSON.parse(saved);
-    } catch (error) {
-      console.warn('Failed to load goal from localStorage:', error);
-    }
-    return initialReadingGoal;
-  });
+  // Loading and error state
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   // UI State
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
@@ -77,32 +45,36 @@ function App() {
   const [sortBy, setSortBy] = useState<SortOption>('dateAdded');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
 
-  // Persist books to localStorage whenever they change
+  // Load initial data from API
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(books));
-    } catch (error) {
-      console.warn('Failed to save books to localStorage:', error);
-    }
-  }, [books]);
+    async function loadData() {
+      try {
+        setIsLoading(true);
+        setError(null);
 
-  // Persist shelves
-  useEffect(() => {
-    try {
-      localStorage.setItem(SHELVES_KEY, JSON.stringify(customShelves));
-    } catch (error) {
-      console.warn('Failed to save shelves to localStorage:', error);
-    }
-  }, [customShelves]);
+        const [booksData, shelvesData, goalData] = await Promise.all([
+          api.fetchBooks(),
+          api.fetchShelves(),
+          api.fetchReadingGoal(),
+        ]);
 
-  // Persist reading goal
-  useEffect(() => {
-    try {
-      localStorage.setItem(GOAL_KEY, JSON.stringify(readingGoal));
-    } catch (error) {
-      console.warn('Failed to save goal to localStorage:', error);
+        setBooks(booksData);
+        setCustomShelves(shelvesData.map(s => ({
+          id: s.id,
+          name: s.name,
+          createdAt: s.createdAt,
+        })));
+        setReadingGoal(goalData);
+      } catch (err) {
+        console.error('Failed to load data:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load data');
+      } finally {
+        setIsLoading(false);
+      }
     }
-  }, [readingGoal]);
+
+    loadData();
+  }, []);
 
   // All unique tags from books
   const allTags = useMemo(() => {
@@ -201,137 +173,156 @@ function App() {
   };
 
   // Handle adding a new book from the form
-  const handleAddBook = (formData: BookFormData) => {
-    const newBook: Book = {
-      id: `user-${Date.now()}`,
-      title: formData.title,
-      author: formData.author,
-      reviews: formData.review ? [{
-        id: `review-${Date.now()}`,
-        content: formData.review,
-        rating: formData.rating,
-        dateAdded: new Date().toISOString().split('T')[0],
-      }] : [],
-      tags: formData.tags
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter((tag) => tag.length > 0),
-      coverUrl: formData.coverUrl || `https://placehold.co/150x220/635C7B/white?text=${encodeURIComponent(
-        formData.title.substring(0, 12)
-      )}`,
-      dateAdded: new Date().toISOString().split('T')[0],
-      status: formData.status,
-      totalPages: formData.totalPages,
-      shelf: formData.shelf,
-      isbn: formData.isbn,
-      description: formData.description,
-    };
-
-    setBooks((prev) => [newBook, ...prev]);
-  };
+  const handleAddBook = useCallback(async (formData: BookFormData) => {
+    try {
+      const newBook = await api.createBook(formData);
+      setBooks(prev => [newBook, ...prev]);
+      
+      // Sync reading goal if the book is marked as read
+      if (formData.status === 'read') {
+        const updatedGoal = await api.syncReadingGoal();
+        setReadingGoal(updatedGoal);
+      }
+    } catch (err) {
+      console.error('Failed to add book:', err);
+      throw err;
+    }
+  }, []);
 
   // Handle editing a book
-  const handleEditBook = (bookId: string, updates: Partial<Book>) => {
-    setBooks(prev => prev.map(book => 
-      book.id === bookId ? { ...book, ...updates } : book
-    ));
-    // Update selected book if it's the one being edited
-    if (selectedBook?.id === bookId) {
-      setSelectedBook(prev => prev ? { ...prev, ...updates } : null);
+  const handleEditBook = useCallback(async (bookId: string, updates: Partial<Book>) => {
+    try {
+      const updatedBook = await api.updateBook(bookId, updates);
+      setBooks(prev => prev.map(book => 
+        book.id === bookId ? updatedBook : book
+      ));
+      // Update selected book if it's the one being edited
+      if (selectedBook?.id === bookId) {
+        setSelectedBook(updatedBook);
+      }
+      
+      // Sync reading goal if status changed
+      if (updates.status) {
+        const updatedGoal = await api.syncReadingGoal();
+        setReadingGoal(updatedGoal);
+      }
+    } catch (err) {
+      console.error('Failed to update book:', err);
+      throw err;
     }
-  };
+  }, [selectedBook?.id]);
 
   // Handle deleting a book
-  const handleDeleteBook = (bookId: string) => {
-    setBooks(prev => prev.filter(book => book.id !== bookId));
-    handleCloseModal();
-  };
+  const handleDeleteBook = useCallback(async (bookId: string) => {
+    try {
+      await api.deleteBook(bookId);
+      setBooks(prev => prev.filter(book => book.id !== bookId));
+      handleCloseModal();
+      
+      // Sync reading goal
+      const updatedGoal = await api.syncReadingGoal();
+      setReadingGoal(updatedGoal);
+    } catch (err) {
+      console.error('Failed to delete book:', err);
+      throw err;
+    }
+  }, []);
 
   // Handle adding a review to a book
-  const handleAddReview = (bookId: string, reviewData: ReviewFormData) => {
-    const newReview = {
-      id: `review-${Date.now()}`,
-      content: reviewData.content,
-      rating: reviewData.rating,
-      dateAdded: new Date().toISOString().split('T')[0],
-    };
-    
-    setBooks(prev => prev.map(book => 
-      book.id === bookId 
-        ? { ...book, reviews: [...book.reviews, newReview] }
-        : book
-    ));
-    
-    // Update selected book
-    if (selectedBook?.id === bookId) {
-      setSelectedBook(prev => prev 
-        ? { ...prev, reviews: [...prev.reviews, newReview] }
-        : null
-      );
+  const handleAddReview = useCallback(async (bookId: string, reviewData: ReviewFormData) => {
+    try {
+      const newReview = await api.addReview(bookId, reviewData);
+      
+      setBooks(prev => prev.map(book => 
+        book.id === bookId 
+          ? { ...book, reviews: [...book.reviews, newReview] }
+          : book
+      ));
+      
+      // Update selected book
+      if (selectedBook?.id === bookId) {
+        setSelectedBook(prev => prev 
+          ? { ...prev, reviews: [...prev.reviews, newReview] }
+          : null
+        );
+      }
+    } catch (err) {
+      console.error('Failed to add review:', err);
+      throw err;
     }
-  };
+  }, [selectedBook?.id]);
 
   // Handle editing a review
-  const handleEditReview = (bookId: string, reviewId: string, updates: Partial<ReviewFormData>) => {
-    setBooks(prev => prev.map(book => {
-      if (book.id !== bookId) return book;
-      return {
-        ...book,
-        reviews: book.reviews.map(review =>
-          review.id === reviewId
-            ? { ...review, ...updates }
-            : review
-        )
-      };
-    }));
-    
-    // Update selected book
-    if (selectedBook?.id === bookId) {
-      setSelectedBook(prev => {
-        if (!prev) return null;
+  const handleEditReview = useCallback(async (bookId: string, reviewId: string, updates: Partial<ReviewFormData>) => {
+    try {
+      const updatedReview = await api.updateReview(bookId, reviewId, updates);
+      
+      setBooks(prev => prev.map(book => {
+        if (book.id !== bookId) return book;
         return {
-          ...prev,
-          reviews: prev.reviews.map(review =>
-            review.id === reviewId
-              ? { ...review, ...updates }
-              : review
+          ...book,
+          reviews: book.reviews.map(review =>
+            review.id === reviewId ? updatedReview : review
           )
         };
-      });
+      }));
+      
+      // Update selected book
+      if (selectedBook?.id === bookId) {
+        setSelectedBook(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            reviews: prev.reviews.map(review =>
+              review.id === reviewId ? updatedReview : review
+            )
+          };
+        });
+      }
+    } catch (err) {
+      console.error('Failed to update review:', err);
+      throw err;
     }
-  };
+  }, [selectedBook?.id]);
 
   // Handle deleting a review
-  const handleDeleteReview = (bookId: string, reviewId: string) => {
-    setBooks(prev => prev.map(book => {
-      if (book.id !== bookId) return book;
-      return {
-        ...book,
-        reviews: book.reviews.filter(review => review.id !== reviewId)
-      };
-    }));
-    
-    // Update selected book
-    if (selectedBook?.id === bookId) {
-      setSelectedBook(prev => {
-        if (!prev) return null;
+  const handleDeleteReview = useCallback(async (bookId: string, reviewId: string) => {
+    try {
+      await api.deleteReview(bookId, reviewId);
+      
+      setBooks(prev => prev.map(book => {
+        if (book.id !== bookId) return book;
         return {
-          ...prev,
-          reviews: prev.reviews.filter(review => review.id !== reviewId)
+          ...book,
+          reviews: book.reviews.filter(review => review.id !== reviewId)
         };
-      });
+      }));
+      
+      // Update selected book
+      if (selectedBook?.id === bookId) {
+        setSelectedBook(prev => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            reviews: prev.reviews.filter(review => review.id !== reviewId)
+          };
+        });
+      }
+    } catch (err) {
+      console.error('Failed to delete review:', err);
+      throw err;
     }
-  };
+  }, [selectedBook?.id]);
 
   // Handle updating reading progress
-  const handleUpdateProgress = (bookId: string, progress: number) => {
-    handleEditBook(bookId, { progress });
-  };
+  const handleUpdateProgress = useCallback(async (bookId: string, progress: number) => {
+    await handleEditBook(bookId, { progress });
+  }, [handleEditBook]);
 
   // Handle changing reading status
-  const handleChangeStatus = (bookId: string, status: ReadingStatus) => {
-    const updates: Partial<Book> = { status };
+  const handleChangeStatus = useCallback(async (bookId: string, status: ReadingStatus) => {
     const book = books.find(b => b.id === bookId);
+    const updates: Partial<Book> = { status };
     
     // If marking as read, set progress to total pages
     if (status === 'read' && book?.totalPages) {
@@ -342,32 +333,80 @@ function App() {
       updates.progress = undefined;
     }
     
-    handleEditBook(bookId, updates);
-  };
+    await handleEditBook(bookId, updates);
+  }, [books, handleEditBook]);
 
   // Handle creating a custom shelf
-  const handleCreateShelf = (name: string) => {
-    const newShelf: Shelf = {
-      id: `shelf-${Date.now()}`,
-      name,
-      createdAt: new Date().toISOString(),
-    };
-    setCustomShelves(prev => [...prev, newShelf]);
-  };
+  const handleCreateShelf = useCallback(async (name: string) => {
+    try {
+      const newShelf = await api.createShelf(name);
+      setCustomShelves(prev => [...prev, {
+        id: newShelf.id,
+        name: newShelf.name,
+        createdAt: newShelf.createdAt,
+      }]);
+    } catch (err) {
+      console.error('Failed to create shelf:', err);
+      throw err;
+    }
+  }, []);
 
   // Handle deleting a custom shelf
-  const handleDeleteShelf = (shelfId: string) => {
-    setCustomShelves(prev => prev.filter(s => s.id !== shelfId));
-    // Remove shelf from books
-    setBooks(prev => prev.map(book => 
-      book.shelf === shelfId ? { ...book, shelf: undefined } : book
-    ));
-  };
+  const handleDeleteShelf = useCallback(async (shelfId: string) => {
+    try {
+      await api.deleteShelf(shelfId);
+      setCustomShelves(prev => prev.filter(s => s.id !== shelfId));
+      // Update books that were on this shelf
+      setBooks(prev => prev.map(book => 
+        book.shelf === shelfId ? { ...book, shelf: undefined } : book
+      ));
+    } catch (err) {
+      console.error('Failed to delete shelf:', err);
+      throw err;
+    }
+  }, []);
 
   // Handle updating reading goal
-  const handleUpdateGoal = (target: number) => {
-    setReadingGoal(prev => ({ ...prev, target }));
-  };
+  const handleUpdateGoal = useCallback(async (target: number) => {
+    try {
+      const updatedGoal = await api.updateReadingGoal(target);
+      setReadingGoal(updatedGoal);
+    } catch (err) {
+      console.error('Failed to update goal:', err);
+      throw err;
+    }
+  }, []);
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background-cream flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <p className="text-primary-600 font-medium">Loading your library...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen bg-background-cream flex items-center justify-center">
+        <div className="text-center max-w-md mx-auto p-6">
+          <div className="text-red-500 text-5xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold text-primary-900 mb-2">Something went wrong</h2>
+          <p className="text-primary-600 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Layout
