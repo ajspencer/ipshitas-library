@@ -1,0 +1,96 @@
+// Prisma schema for Ipshita's Library
+// https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Reading status for a book
+enum ReadingStatus {
+  want_to_read
+  reading
+  read
+}
+
+// Book model - main entity
+model Book {
+  id          String        @id @default(cuid())
+  title       String
+  author      String
+  tags        String[]      @default([])
+  coverUrl    String?
+  dateAdded   DateTime      @default(now())
+  status      ReadingStatus @default(read)
+  progress    Int?          // Pages read (for "reading" status)
+  totalPages  Int?
+  shelfId     String?
+  isbn        String?
+  description String?
+  
+  // Relations
+  reviews     Review[]
+  shelf       Shelf?        @relation(fields: [shelfId], references: [id], onDelete: SetNull)
+  
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([status])
+  @@index([shelfId])
+}
+
+// Review model - multiple reviews per book
+model Review {
+  id        String   @id @default(cuid())
+  content   String
+  rating    Int      // 1-5 scale
+  dateAdded DateTime @default(now())
+  
+  // Relations
+  bookId    String
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([bookId])
+}
+
+// Custom shelf for organizing books
+model Shelf {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  
+  // Relations
+  books     Book[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Reading goal for the year
+model ReadingGoal {
+  id      String @id @default(cuid())
+  year    Int    @unique
+  target  Int
+  current Int    @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Profile data (single row table)
+model Profile {
+  id          String @id @default("default")
+  name        String @default("Ipshita")
+  libraryName String @default("Ipshita's Library")
+  bio         String @default("")
+  avatar      String @default("📚")
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
