@@ -5,6 +5,93 @@ import { ReadingStatus } from '@prisma/client';
 const router = Router();
 
 /**
+ * Fetch cover from Google Books API (same as recommendations)
+ */
+async function getCoverFromGoogleBooks(title: string, author: string) {
+  try {
+    const query = encodeURIComponent(`${title} ${author}`);
+    const response = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`);
+    const data = await response.json();
+    
+    if (data.items && data.items.length > 0) {
+      const book = data.items[0].volumeInfo;
+      const isbn = book.industryIdentifiers?.find((id: any) => id.type === 'ISBN_13' || id.type === 'ISBN_10')?.identifier;
+      const coverUrl = book.imageLinks?.large || book.imageLinks?.medium || book.imageLinks?.thumbnail;
+      
+      return {
+        coverUrl: coverUrl?.replace('http://', 'https://'),
+        isbn,
+        pages: book.pageCount,
+      };
+    }
+  } catch (error) {
+    console.warn(`Google Books failed for ${title}:`, error);
+  }
+  return {};
+}
+
+/**
+ * Fetch cover from Open Library API (same as recommendations)
+ */
+async function getCoverFromOpenLibrary(title: string, author: string) {
+  try {
+    const response = await fetch(
+      `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&author=${encodeURIComponent(author)}&limit=1`
+    );
+    const data = await response.json();
+    
+    if (data.docs?.[0]) {
+      const book = data.docs[0];
+      return {
+        coverUrl: book.cover_i ? `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg` : undefined,
+        isbn: book.isbn?.[0],
+        pages: book.number_of_pages_median,
+      };
+    }
+  } catch (error) {
+    console.warn(`Open Library failed for ${title}:`, error);
+  }
+  return {};
+}
+
+/**
+ * Automatically fetch cover for a book if missing - same logic as recommendations
+ */
+async function ensureBookHasCover(book: any): Promise<string> {
+  // If book already has a valid cover URL, return it
+  if (book.coverUrl && book.coverUrl.startsWith('http')) {
+    return book.coverUrl;
+  }
+
+  console.log(`📷 Fetching cover for "${book.title}" by ${book.author}...`);
+  
+  //Try both sources in parallel
+  const [googleResult, openLibResult] = await Promise.all([
+    getCoverFromGoogleBooks(book.title, book.author),
+    getCoverFromOpenLibrary(book.title, book.author),
+  ]);
+
+  const coverUrl = googleResult.coverUrl || openLibResult.coverUrl;
+  
+  // If we found a cover, update the database
+  if (coverUrl) {
+    const updateData: any = { coverUrl };
+    if (googleResult.isbn && !book.isbn) updateData.isbn = googleResult.isbn;
+    if (googleResult.pages && !book.totalPages) updateData.totalPages = googleResult.pages;
+
+    await prisma.book.update({
+      where: { id: book.id },
+      data: updateData
+    });
+    console.log(`✅ Updated cover for "${book.title}"`);
+    return coverUrl;
+  }
+
+  // Return placeholder if no cover found
+  return book.coverUrl || `https://placehold.co/150x220/635C7B/white?text=${encodeURIComponent(book.title.substring(0, 12))}`;
+}
+
+/**
  * GET /api/books
  * List all books with their reviews
  */
@@ -20,29 +107,34 @@ router.get('/', async (req: Request, res: Response) => {
       orderBy: { dateAdded: 'desc' },
     });
 
-    // Transform to match frontend format
-    const transformedBooks = books.map((book) => ({
-      id: book.id,
-      title: book.title,
-      author: book.author,
-      reviews: book.reviews.map((r) => ({
-        id: r.id,
-        content: r.content,
-        rating: r.rating,
-        dateAdded: r.dateAdded.toISOString().split('T')[0],
-      })),
-      tags: book.tags,
-      coverUrl: book.coverUrl || '',
-      dateAdded: book.dateAdded.toISOString().split('T')[0],
-      status: book.status,
-      progress: book.progress,
-      totalPages: book.totalPages,
-      shelf: book.shelfId,
-      isbn: book.isbn,
-      description: book.description,
-    }));
+    // Ensure all books have covers (fetch if missing)
+    const booksWithCovers = await Promise.all(
+      books.map(async (book) => {
+        const coverUrl = await ensureBookHasCover(book);
+        return {
+          id: book.id,
+          title: book.title,
+          author: book.author,
+          reviews: book.reviews.map((r) => ({
+            id: r.id,
+            content: r.content,
+            rating: r.rating,
+            dateAdded: r.dateAdded.toISOString().split('T')[0],
+          })),
+          tags: book.tags,
+          coverUrl,
+          dateAdded: book.dateAdded.toISOString().split('T')[0],
+          status: book.status,
+          progress: book.progress,
+          totalPages: book.totalPages,
+          shelf: book.shelfId,
+          isbn: book.isbn,
+          description: book.description,
+        };
+      })
+    );
 
-    res.json(transformedBooks);
+    res.json(booksWithCovers);
   } catch (error) {
     console.error('Failed to fetch books:', error);
     res.status(500).json({ error: 'Failed to fetch books' });

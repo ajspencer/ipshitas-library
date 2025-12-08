@@ -6,6 +6,7 @@ import { booksRouter } from './routes/books.js';
 import { shelvesRouter } from './routes/shelves.js';
 import { readingGoalRouter } from './routes/reading-goal.js';
 import { profileRouter } from './routes/profile.js';
+import { articlesRouter } from './routes/articles.js';
 
 // Load environment variables
 dotenv.config();
@@ -29,6 +30,7 @@ app.use('/api/shelves', shelvesRouter);
 app.use('/api/reading-goal', readingGoalRouter);
 app.use('/api/profile', profileRouter);
 app.use('/api/recommendations', recommendationsRouter);
+app.use('/api/articles', articlesRouter);
 
 // Health check
 app.get('/api/health', (req, res) => {

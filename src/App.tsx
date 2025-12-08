@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Layout } from './components/Layout';
+import { Layout, AppMode } from './components/Layout';
 import { Profile } from './components/Profile';
 import { BookGrid } from './components/BookGrid';
 import { ReviewModal } from './components/ReviewModal';
@@ -7,6 +7,7 @@ import { AddBookForm } from './components/AddBookForm';
 import { SearchFilterBar } from './components/SearchFilterBar';
 import { ReadingStats } from './components/ReadingStats';
 import { RecommendationsPanel } from './components/RecommendationsPanel';
+import { ArticleReader } from './components/ArticleReader';
 import { Book, BookFormData, ReviewFormData, ReadingStatus, Shelf, ReadingGoal, getAverageRating } from './types/book';
 import { defaultShelves } from './data/initialBooks';
 import * as api from './services/api';
@@ -36,6 +37,7 @@ function App() {
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
+  const [appMode, setAppMode] = useState<AppMode>('books');
   
   // Filter/Sort state
   const [searchQuery, setSearchQuery] = useState('');
@@ -419,84 +421,92 @@ function App() {
       onDeleteShelf={handleDeleteShelf}
       readingGoal={readingGoal}
       onUpdateGoal={handleUpdateGoal}
+      mode={appMode}
+      onModeChange={setAppMode}
     >
-      {/* Profile section */}
-      <Profile 
-        bookCount={books.length} 
-        stats={stats}
-        readingGoal={readingGoal}
-      />
+      {appMode === 'articles' ? (
+        <ArticleReader />
+      ) : (
+        <>
+          {/* Profile section */}
+          <Profile 
+            bookCount={books.length} 
+            stats={stats}
+            readingGoal={readingGoal}
+          />
 
-      {/* AI Recommendations Panel */}
-      <RecommendationsPanel books={books} onAddBook={handleAddBook} />
+          {/* AI Recommendations Panel */}
+          <RecommendationsPanel books={books} onAddBook={handleAddBook} />
 
-      {/* Reading Statistics */}
-      <ReadingStats books={books} />
+          {/* Reading Statistics */}
+          <ReadingStats books={books} />
 
-      {/* Search, Filter, Sort Bar */}
-      <SearchFilterBar
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        shelfFilter={shelfFilter}
-        onShelfFilterChange={setShelfFilter}
-        tagFilter={tagFilter}
-        onTagFilterChange={setTagFilter}
-        sortBy={sortBy}
-        onSortByChange={setSortBy}
-        sortDirection={sortDirection}
-        onSortDirectionChange={setSortDirection}
-        allTags={allTags}
-        allShelves={allShelves}
-      />
+          {/* Search, Filter, Sort Bar */}
+          <SearchFilterBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            shelfFilter={shelfFilter}
+            onShelfFilterChange={setShelfFilter}
+            tagFilter={tagFilter}
+            onTagFilterChange={setTagFilter}
+            sortBy={sortBy}
+            onSortByChange={setSortBy}
+            sortDirection={sortDirection}
+            onSortDirectionChange={setSortDirection}
+            allTags={allTags}
+            allShelves={allShelves}
+          />
 
-      {/* Section header */}
-      <div className="mb-6">
-        <h2 className="font-serif text-2xl font-semibold text-primary-900 mb-1">
-          {shelfFilter === 'all' ? 'My Reading Journey' : 
-           shelfFilter === 'want_to_read' ? 'Want to Read' :
-           shelfFilter === 'reading' ? 'Currently Reading' :
-           shelfFilter === 'read' ? 'Books I\'ve Read' :
-           allShelves.find(s => s.id === shelfFilter)?.name || 'My Books'}
-        </h2>
-        <p className="text-primary-500 text-sm">
-          {filteredBooks.length} book{filteredBooks.length !== 1 ? 's' : ''} 
-          {searchQuery && ` matching "${searchQuery}"`}
-          {tagFilter && ` tagged with "${tagFilter}"`}
-        </p>
-      </div>
+          {/* Section header */}
+          <div className="mb-6">
+            <h2 className="font-serif text-2xl font-semibold text-primary-900 mb-1">
+              {shelfFilter === 'all' ? 'My Reading Journey' : 
+               shelfFilter === 'want_to_read' ? 'Want to Read' :
+               shelfFilter === 'reading' ? 'Currently Reading' :
+               shelfFilter === 'read' ? 'Books I\'ve Read' :
+               allShelves.find(s => s.id === shelfFilter)?.name || 'My Books'}
+            </h2>
+            <p className="text-primary-500 text-sm">
+              {filteredBooks.length} book{filteredBooks.length !== 1 ? 's' : ''} 
+              {searchQuery && ` matching "${searchQuery}"`}
+              {tagFilter && ` tagged with "${tagFilter}"`}
+            </p>
+          </div>
 
-      {/* Book grid */}
-      <BookGrid 
-        books={filteredBooks} 
-        onBookClick={handleBookClick}
-        isFiltered={!!(searchQuery || statusFilter !== 'all' || shelfFilter !== 'all' || tagFilter)}
-      />
+          {/* Book grid */}
+          <BookGrid 
+            books={filteredBooks} 
+            onBookClick={handleBookClick}
+            isFiltered={!!(searchQuery || statusFilter !== 'all' || shelfFilter !== 'all' || tagFilter)}
+          />
 
-      {/* Review modal */}
-      <ReviewModal
-        book={selectedBook}
-        isOpen={isModalOpen}
-        onClose={handleCloseModal}
-        onEditBook={handleEditBook}
-        onDeleteBook={handleDeleteBook}
-        onAddReview={handleAddReview}
-        onEditReview={handleEditReview}
-        onDeleteReview={handleDeleteReview}
-        onUpdateProgress={handleUpdateProgress}
-        onChangeStatus={handleChangeStatus}
-        allShelves={allShelves}
-        onAddBook={handleAddBook}
-      />
+          {/* Review modal */}
+          <ReviewModal
+            book={selectedBook}
+            isOpen={isModalOpen}
+            onClose={handleCloseModal}
+            onEditBook={handleEditBook}
+            onDeleteBook={handleDeleteBook}
+            onAddReview={handleAddReview}
+            onEditReview={handleEditReview}
+            onDeleteReview={handleDeleteReview}
+            onUpdateProgress={handleUpdateProgress}
+            onChangeStatus={handleChangeStatus}
+            allShelves={allShelves}
+            onAddBook={handleAddBook}
+          />
 
-      {/* Add book floating button and form */}
-      <AddBookForm 
-        onAddBook={handleAddBook} 
-        isOpen={isAddFormOpen}
-        onOpenChange={setIsAddFormOpen}
-        allShelves={allShelves}
-      />
+          {/* Add book floating button and form */}
+          <AddBookForm 
+            onAddBook={handleAddBook} 
+            isOpen={isAddFormOpen}
+            onOpenChange={setIsAddFormOpen}
+            allShelves={allShelves}
+          />
+        </>
+      )}
     </Layout>
   );
 }

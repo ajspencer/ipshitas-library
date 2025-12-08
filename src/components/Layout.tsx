@@ -1,6 +1,8 @@
 import { ReactNode, useState } from 'react';
-import { BookMarked, Library, BookOpen, BookCheck, Bookmark, Plus, Trash2, ChevronLeft, ChevronRight, Target } from 'lucide-react';
+import { BookMarked, Library, BookOpen, BookCheck, Bookmark, Plus, Trash2, ChevronLeft, ChevronRight, Target, FileText } from 'lucide-react';
 import { Book, Shelf, ReadingGoal } from '../types/book';
+
+export type AppMode = 'books' | 'articles';
 
 interface LayoutProps {
   children: ReactNode;
@@ -13,6 +15,8 @@ interface LayoutProps {
   onDeleteShelf: (shelfId: string) => void;
   readingGoal: ReadingGoal;
   onUpdateGoal: (target: number) => void;
+  mode: AppMode;
+  onModeChange: (mode: AppMode) => void;
 }
 
 /**
@@ -28,6 +32,8 @@ export function Layout({
   onDeleteShelf,
   readingGoal,
   onUpdateGoal,
+  mode,
+  onModeChange,
 }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [newShelfName, setNewShelfName] = useState('');
@@ -71,22 +77,51 @@ export function Layout({
     <div className="min-h-screen bg-cream">
       {/* Decorative header bar */}
       <header className="bg-primary py-4 shadow-lg sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 flex items-center gap-3">
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1 text-lavender-light hover:text-white transition-colors lg:hidden"
-          >
-            {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
-          </button>
-          <BookMarked className="w-6 h-6 text-lavender-light" />
-          <span className="font-serif text-lavender-light text-lg tracking-wide">
-            A Cozy Reading Nook
-          </span>
+        <div className="max-w-7xl mx-auto px-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`p-1 text-lavender-light hover:text-white transition-colors ${mode === 'articles' ? 'hidden' : 'lg:hidden'}`}
+            >
+              {sidebarOpen ? <ChevronLeft className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
+            </button>
+            <BookMarked className="w-6 h-6 text-lavender-light" />
+            <span className="font-serif text-lavender-light text-lg tracking-wide">
+              A Cozy Reading Nook
+            </span>
+          </div>
+          
+          {/* Mode Toggle */}
+          <div className="flex items-center gap-1 bg-primary-dark/50 rounded-full p-1">
+            <button
+              onClick={() => onModeChange('books')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                mode === 'books'
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-lavender-light hover:text-white'
+              }`}
+            >
+              <Library className="w-4 h-4" />
+              <span className="hidden sm:inline">Books</span>
+            </button>
+            <button
+              onClick={() => onModeChange('articles')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                mode === 'articles'
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-lavender-light hover:text-white'
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">Articles</span>
+            </button>
+          </div>
         </div>
       </header>
 
       <div className="flex max-w-7xl mx-auto">
-        {/* Sidebar */}
+        {/* Sidebar - only show in books mode */}
+        {mode === 'books' && (
         <aside className={`
           ${sidebarOpen ? 'w-64' : 'w-0 lg:w-64'} 
           transition-all duration-300 overflow-hidden
@@ -251,6 +286,7 @@ export function Layout({
             </div>
           </div>
         </aside>
+        )}
 
         {/* Main content area */}
         <main className="flex-1 px-4 py-8 min-w-0">

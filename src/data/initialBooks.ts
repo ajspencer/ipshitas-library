@@ -278,12 +278,12 @@ export const initialBooks: Book[] = [
       }
     ],
     tags: ['Memoir', 'Politics', 'Russia'],
-    coverUrl: 'https://covers.openlibrary.org/b/isbn/9780593802649-L.jpg',
+    coverUrl: 'https://books.google.com/books/content?id=w6JREQAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api',
     dateAdded: '2024-12-01',
     status: 'read',
-    totalPages: 480,
-    progress: 480,
-    isbn: '9780593802649',
+    totalPages: 753,
+    progress: 753,
+    isbn: '9798217172375',
   },
   {
     id: '15',
@@ -327,23 +327,23 @@ export const initialBooks: Book[] = [
   },
   {
     id: '17',
-    title: 'Things in Nature Merely Grow',
+    title: 'Poems 1962-2012',
     author: 'Louise Glück',
     reviews: [
       {
         id: 'r17-1',
-        content: "Glück's poetry is spare, precise, and deeply profound. Each poem feels like a meditation on existence, loss, and the natural world.",
+        content: "Glück's poetry is spare, precise, and deeply profound. Each poem feels like a meditation on existence, loss, and the natural world. This collected works spans 50 years of her extraordinary career.",
         rating: 5,
         dateAdded: '2023-03-15',
       }
     ],
     tags: ['Poetry', 'Literature'],
-    coverUrl: 'https://covers.openlibrary.org/b/isbn/9780374612504-L.jpg',
+    coverUrl: 'https://books.google.com/books/content?id=9NmZAwAAQBAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api',
     dateAdded: '2023-03-15',
     status: 'read',
-    totalPages: 112,
-    progress: 112,
-    isbn: '9780374612504',
+    totalPages: 657,
+    progress: 657,
+    isbn: '9781466875623',
   },
   {
     id: '18',
