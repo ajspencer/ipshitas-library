@@ -94,3 +94,19 @@ model Profile {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// Article model - for article reading tracker
+model Article {
+  id         String   @id @default(cuid())
+  title      String
+  url        String
+  text       String   @db.Text
+  wordCount  Int
+  pageCount  Int
+  dateAdded  DateTime @default(now())
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([dateAdded])
+}

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { FileText, Hash, BookOpen, Trash2, Link, Loader2, Settings2, ExternalLink, X, Clock } from 'lucide-react';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -10,7 +10,7 @@ interface ArticleEntry {
   text: string;
   wordCount: number;
   pageCount: number;
-  dateAdded: Date;
+  dateAdded: Date | string;
 }
 
 const WORDS_PER_PAGE_DEFAULT = 250;
@@ -22,6 +22,7 @@ export function ArticleReader() {
   const [articles, setArticles] = useState<ArticleEntry[]>([]);
   const [articleUrl, setArticleUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingArticles, setIsLoadingArticles] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastExtracted, setLastExtracted] = useState<{
     url: string;
@@ -33,6 +34,30 @@ export function ArticleReader() {
   const [wordsPerPage, setWordsPerPage] = useState(WORDS_PER_PAGE_DEFAULT);
   const [showSettings, setShowSettings] = useState(false);
   const [previewArticle, setPreviewArticle] = useState<ArticleEntry | null>(null);
+
+  // Load saved articles from API on mount
+  useEffect(() => {
+    async function loadArticles() {
+      try {
+        setIsLoadingArticles(true);
+        const response = await fetch(`${API_BASE}/api/articles`);
+        if (!response.ok) {
+          throw new Error('Failed to load articles');
+        }
+        const data = await response.json();
+        setArticles(data.map((a: ArticleEntry) => ({
+          ...a,
+          dateAdded: new Date(a.dateAdded),
+        })));
+      } catch (err) {
+        console.error('Failed to load articles:', err);
+        // Don't show error to user, just log it
+      } finally {
+        setIsLoadingArticles(false);
+      }
+    }
+    loadArticles();
+  }, []);
 
   // Total stats
   const totalStats = useMemo(() => {
@@ -89,7 +114,7 @@ export function ArticleReader() {
     }
   };
 
-  const handleSaveArticle = () => {
+  const handleSaveArticle = async () => {
     if (!lastExtracted) return;
 
     // Use the title from the API, or fallback to URL-based title
@@ -103,23 +128,55 @@ export function ArticleReader() {
       }
     }
 
-    const newArticle: ArticleEntry = {
-      id: crypto.randomUUID(),
-      title,
-      url: lastExtracted.url,
-      text: lastExtracted.text,
-      wordCount: lastExtracted.wordCount,
-      pageCount: lastExtracted.pageCount,
-      dateAdded: new Date(),
-    };
+    try {
+      setIsLoading(true);
+      const response = await fetch(`${API_BASE}/api/articles`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title,
+          url: lastExtracted.url,
+          text: lastExtracted.text,
+          wordCount: lastExtracted.wordCount,
+          pageCount: lastExtracted.pageCount,
+        }),
+      });
 
-    setArticles(prev => [newArticle, ...prev]);
-    setArticleUrl('');
-    setLastExtracted(null);
+      if (!response.ok) {
+        throw new Error('Failed to save article');
+      }
+
+      const savedArticle = await response.json();
+      setArticles(prev => [{
+        ...savedArticle,
+        dateAdded: new Date(savedArticle.dateAdded),
+      }, ...prev]);
+      setArticleUrl('');
+      setLastExtracted(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save article');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleDeleteArticle = (id: string) => {
-    setArticles(prev => prev.filter(a => a.id !== id));
+  const handleDeleteArticle = async (id: string) => {
+    try {
+      const response = await fetch(`${API_BASE}/api/articles/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete article');
+      }
+
+      setArticles(prev => prev.filter(a => a.id !== id));
+    } catch (err) {
+      console.error('Failed to delete article:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete article');
+    }
   };
 
   const handleClear = () => {
@@ -139,6 +196,17 @@ export function ArticleReader() {
           Paste article links to extract text, count words, and convert to page equivalents
         </p>
       </div>
+
+      {/* Loading State */}
+      {isLoadingArticles && (
+        <div className="text-center py-8">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
+          <p className="text-primary-500">Loading your articles...</p>
+        </div>
+      )}
+
+      {!isLoadingArticles && (
+        <>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-4 mb-8">
@@ -331,7 +399,7 @@ export function ArticleReader() {
                       {new URL(article.url).hostname}
                     </p>
                     <p className="text-sm text-primary-400 mt-1">
-                      {article.dateAdded.toLocaleDateString('en-US', {
+                      {new Date(article.dateAdded).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',
                         year: 'numeric',
@@ -409,7 +477,7 @@ export function ArticleReader() {
                     </a>
                     <span className="flex items-center gap-1">
                       <Clock className="w-4 h-4" />
-                      {previewArticle.dateAdded.toLocaleDateString('en-US', {
+                      {new Date(previewArticle.dateAdded).toLocaleDateString('en-US', {
                         month: 'long',
                         day: 'numeric',
                         year: 'numeric',
@@ -493,6 +561,8 @@ export function ArticleReader() {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { prisma } from '../lib/prisma';
 
 const router = Router();
 
@@ -132,6 +133,70 @@ router.post('/extract', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error extracting article:', error);
     res.status(500).json({ error: 'Failed to extract article content' });
+  }
+});
+
+/**
+ * Get all saved articles
+ */
+router.get('/', async (req: Request, res: Response) => {
+  try {
+    const articles = await prisma.article.findMany({
+      orderBy: {
+        dateAdded: 'desc',
+      },
+    });
+    
+    res.json(articles);
+  } catch (error) {
+    console.error('Error fetching articles:', error);
+    res.status(500).json({ error: 'Failed to fetch articles' });
+  }
+});
+
+/**
+ * Save a new article
+ */
+router.post('/', async (req: Request, res: Response) => {
+  try {
+    const { title, url, text, wordCount, pageCount } = req.body;
+    
+    if (!title || !url || !text || wordCount === undefined || pageCount === undefined) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+    
+    const article = await prisma.article.create({
+      data: {
+        title,
+        url,
+        text,
+        wordCount,
+        pageCount,
+      },
+    });
+    
+    res.status(201).json(article);
+  } catch (error) {
+    console.error('Error saving article:', error);
+    res.status(500).json({ error: 'Failed to save article' });
+  }
+});
+
+/**
+ * Delete an article
+ */
+router.delete('/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    await prisma.article.delete({
+      where: { id },
+    });
+    
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting article:', error);
+    res.status(500).json({ error: 'Failed to delete article' });
   }
 });
 
